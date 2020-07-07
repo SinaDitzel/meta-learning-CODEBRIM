@@ -1,0 +1,4 @@
+,epsilon,net,train_flag,spp_size,reward,hard_best_val,hard_val_all_epochs,soft_best_val,soft_val_all_epochs,hard_best_background,hard_best_crack,hard_best_spallation,hard_best_exposed_bars,hard_best_efflorescence,hard_best_corrosion_stain
+_,_,"[C(256,9,2,1),C(32,3,1,1),C(256,5,1,1),C(256,7,2,1),FC(128),SM(6)]",_,_,_,_,_,_,_,_,_,_,_,_,_
+_,_,"[C(128,5,1,1),C(32,7,2,1),C(256,3,1,0),C(32,3,2,1),C(128,9,2,1),FC(128),SM(6)]_,_,_,_,_,_,_,_,_,_,_,_,_
+_,_,"[C(128,3,1,0),C(128,9,2,1),C(256,3,1,0),FC(64),SM(6)]",_,_,_,_,_,_,_,_,_,_,_,_,_
