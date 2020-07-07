@@ -11,6 +11,8 @@ import torch
 from lib.cmdparser import parser
 import lib.Datasets.datasets as datasets
 from lib.MetaQNN.q_learner import QLearner as QLearner
+from lib.Models.network import Net
+from lib.Models.architectures import VGG_A
 import lib.Models.state_space_parameters as state_space_parameters
 from lib.Models.initialization import WeightInit
 from lib.Training.train_model import train_val_net
@@ -90,10 +92,14 @@ def main():
                     # train net if net not trained before
                     else:
                         # train/val search net
+                        model = Net(q_learner.state_list, num_classes = dataset.num_classes,        
+                                        net_input  = next(iter(dataset.train_loader))[0],
+                                        bn_vl = args.batch_norm,
+                                        do_drop =  args.drop_out_drop)
                         mem_fit, spp_size, hard_best_val, hard_val_all_epochs, soft_best_val, soft_val_all_epochs,\
                         train_flag, hard_best_background, hard_best_crack, hard_best_spallation,\
                         hard_best_exposed_bars, hard_best_efflorescence, hard_best_corrosion_stain =\
-                            train_val_net(q_learner.state_list, dataset, weight_initializer, device, args, save_path)
+                            train_val_net(model, dataset, weight_initializer, device, args, save_path)
 
                         # check if net fits memory
                         while mem_fit is False:
@@ -110,7 +116,7 @@ def main():
                                 soft_val_all_epochs, train_flag, hard_best_background, hard_best_crack,\
                                 hard_best_spallation, hard_best_exposed_bars, hard_best_efflorescence,\
                                 hard_best_corrosion_stain =\
-                                    train_val_net(q_learner.state_list, dataset, weight_initializer, device, args,
+                                    train_val_net(model, dataset, weight_initializer, device, args,
                                                   save_path)
 
                         # add new net and performance measures to replay buffer if it fits in memory after splitting
@@ -137,7 +143,7 @@ def main():
         # save fully filled replay buffer and final Q-values
         q_learner.save_final()
 
-    # load single architecture config from replay buffer and train till convergence
+    # load single architecture state list from replay_buffer_csv_path and train till convergence
     elif int(args.task) == 2:
         # raise exceptions if requirements to continue incomplete search not met
         if (args.replay_buffer_csv_path is None) or (not os.path.exists(args.replay_buffer_csv_path)):
@@ -148,10 +154,16 @@ def main():
         # generate states for fixed net from a complete search
         q_learner.generate_fixed_net_states()
 
+        # builds the net from the state list
+        model = Net(q_learner.state_list, num_classes = dataset.num_classes,        
+                                        net_input  = next(iter(dataset.train_loader))[0],
+                                        bn_vl = args.batch_norm,
+                                        do_drop =  args.drop_out_drop)
+
         # train/val fixed net exhaustively
         mem_fit, spp_size, hard_best_val, hard_val_all_epochs, soft_best_val, soft_val_all_epochs, train_flag,\
         hard_best_background, hard_best_crack, hard_best_spallation, hard_best_exposed_bars, hard_best_efflorescence, \
-        hard_best_corrosion_stain = train_val_net(q_learner.state_list, dataset, weight_initializer, device, args,
+        hard_best_corrosion_stain = train_val_net(model, dataset, weight_initializer, device, args,
                                                   save_path)
 
         # add fixed net and performance measures to a data frame and save it
@@ -168,7 +180,18 @@ def main():
 
         # save fixed net buffer
         q_learner.save_final()
+    
+    # train a baselinemodel specified args... #TODO
+    elif int(args.task) == 3:
 
+        # builds the net from the state list
+        model = VGG_A( num_classes = dataset.num_classes, net_input  = next(iter(dataset.train_loader))[0], bn_vl = args.batch_norm, do_drop =  args.drop_out_drop)
+
+        # train/val fixed net exhaustively
+        mem_fit, spp_size, hard_best_val, hard_val_all_epochs, soft_best_val, soft_val_all_epochs, train_flag,\
+        hard_best_background, hard_best_crack, hard_best_spallation, hard_best_exposed_bars, hard_best_efflorescence, \
+        hard_best_corrosion_stain = train_val_net(model, dataset, weight_initializer, device, args,
+                                                  save_path)
     # raise exception if no matching task
     else:
         raise NotImplementedError('Given task no. not implemented.')

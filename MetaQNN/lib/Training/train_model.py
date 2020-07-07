@@ -19,12 +19,12 @@ from lib.Utility.utils import GPUMem
 from lib.Utility.utils import save_checkpoint
 
 
-def train_val_net(state_list, dataset, weight_initializer, device, args, save_path):
+def train_val_net(model, dataset, weight_initializer, device, args, save_path):
     """
     builds a net given a state list, and trains and validates it
     
     Parameters:
-        state_list (list): list of states to build the net
+        model : network defined as nn.Model
         dataset (lib.Datasets.datasets.CODEBRIM): dataset to train and validate the net on
         weight_initializer (lib.Models.initialization.WeightInit): weight initializer for initializing the weights of
                                                                    the network
@@ -37,27 +37,27 @@ def train_val_net(state_list, dataset, weight_initializer, device, args, save_pa
         val_acc_all_epochs (list): list of validation accuracies in all epochs
         train_flag (bool): False if net's been early-stopped, False otherwise
     """
+
+    print(model)
+    print('*' * 80)
+
+    spp_size = 0
+    if hasattr(model, 'spp_size'):
+        spp_size = model.spp_size
+        print('no. of spp scales: {}'.format(spp_size))
+        print('*' * 80)
+    
     # reset the data loaders
     dataset.train_loader, dataset.val_loader, dataset.test_loader = dataset.get_dataset_loader(args.batch_size,
                                                                                                args.workers,
                                                                                                torch.cuda.is_available()
                                                                                                )
     net_input, _ = next(iter(dataset.train_loader))
-
-    num_classes = dataset.num_classes
     batch_size = net_input.size(0)
 
     # gets number of available gpus and total gpu memory
     num_gpu = float(torch.cuda.device_count())
     gpu_mem = GPUMem(torch.device('cuda') == device)
-
-    # builds the net from the state list
-    model = Net(state_list, num_classes, net_input, args.batch_norm, args.drop_out_drop)
-
-    print(model)
-    print('*' * 80)
-    print('no. of spp scales: {}'.format(model.spp_size))
-    print('*' * 80)
 
     # sets cudnn benchmark flag
     cudnn.benchmark = True
@@ -143,9 +143,7 @@ def train_val_net(state_list, dataset, weight_initializer, device, args, save_pa
         train(dataset.train_loader, model, criterion, epoch, optimizer, lr_scheduler, device, args, split_batch_size)
         loss_val, hard_val, soft_val, hard_background, hard_crack, hard_spallation, hard_exposed_bars,\
             hard_efflorescence, hard_corrosion_stain = val(dataset.val_loader, model, criterion, device)
-        if int(args.task) == 2:
-            _ = val(dataset.test_loader, model, criterion, device, is_val=False)
-
+       
         if len(hard_val_all_epochs) == 0 or hard_val == max(hard_val_all_epochs):
             hard_best_background = hard_background
             hard_best_crack = hard_crack
@@ -157,15 +155,24 @@ def train_val_net(state_list, dataset, weight_initializer, device, args, save_pa
         hard_val_all_epochs.append(hard_val)
         soft_val_all_epochs.append(soft_val)
 
-        if int(args.task) == 2:
+        if (int(args.task) == 2 or int(args.task) == 3):
+            _ = val(dataset.test_loader, model, criterion, device, is_val=False)
             # saves model dict while training fixed net
-            state = {'epoch': epoch,
-                     'arch': 'Fixed net: replay buffer - {}, index no - {}'.format(args.replay_buffer_csv_path,
-                                                                                   args.fixed_net_index_no),
-                     'state_dict': model.state_dict(),
-                     'hard_val': hard_val,
-                     'optimizer': optimizer.state_dict()
-                     }
+            if (int(args.task) == 2):
+                state = {'epoch': epoch,
+                        'arch': 'Fixed net: replay buffer - {}, index no - {}'.format(args.replay_buffer_csv_path,
+                                                                                    args.fixed_net_index_no),
+                        'state_dict': model.state_dict(),
+                        'hard_val': hard_val,
+                        'optimizer': optimizer.state_dict()
+                        }
+            if (int(args.task) == 3):
+                state = {'epoch': epoch,
+                        'arch': model.__class__.__name__,
+                        'state_dict': model.state_dict(),
+                        'hard_val': hard_val,
+                        'optimizer': optimizer.state_dict()
+                        }
             save_checkpoint(state, max(hard_val_all_epochs) == hard_val, save_path)
 
         # checks for early stopping; early-stops if the mean of the validation accuracy from the last 3 epochs before
@@ -180,8 +187,12 @@ def train_val_net(state_list, dataset, weight_initializer, device, args, save_pa
     soft_best_val = max(soft_val_all_epochs)
 
     # free up memory by deleting objects
-    spp_size = model.module.spp_size
     del model, criterion, optimizer, lr_scheduler
+    if (int(args.task) == 2 or int(args.task) == 3):
+        print("final results:")
+        print("best validation accuracy:" ,hard_best_val)
+        print('*' * 80)
+
 
     return True, spp_size, hard_best_val, hard_val_all_epochs, soft_best_val, soft_val_all_epochs, train_flag,\
            hard_best_background, hard_best_crack, hard_best_spallation, hard_best_exposed_bars,\
